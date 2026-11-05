@@ -129,6 +129,18 @@ test('an unpublished car is deleted only once its page 404s', async () => {
   assert.deepEqual(deletes, ['/1/indexes/stock/2']);
 });
 
+test('unpublish then republish with no changes crawls the car again', async () => {
+  const w = world({ live: ['/inventory/car-1'], index: [] });
+  const event = { trigger: 'collection_item_published', items: published('i1', 'car-1').items };
+  assert.equal((await handleEvent(config, event, w.deps)).action, 'crawl');
+  await handleEvent(
+    config,
+    { trigger: 'collection_item_unpublished', items: [{ id: 'i1', collectionId: VEHICLES, slug: 'car-1' }] },
+    w.deps,
+  );
+  assert.equal((await handleEvent(config, event, w.deps)).action, 'crawl');
+});
+
 test('a webhook for a car that is still live deletes nothing', async () => {
   const index = [{ objectID: '1', url: '/inventory/car-1' }];
   const w = world({ live: ['/inventory/car-1'], index });

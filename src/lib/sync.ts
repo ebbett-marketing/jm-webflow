@@ -37,6 +37,8 @@ export async function handleEvent(cfg: SyncConfig, event: WebflowEvent, deps: De
   if (!vehicles.length && !unknown.length) return { trigger, action: 'ignored', reason: 'not a vehicle' };
 
   if (REMOVE_TRIGGERS.has(trigger)) {
+    // Forget what was last crawled, so republishing the car unchanged still puts it back in search.
+    for (const item of [...vehicles, ...unknown]) if (item.id) await deps.state.saveHash(item.id, '');
     const suspects = vehicles.flatMap((item) => (item.slug ? [cfg.vehiclePath + item.slug] : []));
     return { trigger, action: 'reconcile', ...(await reconcile(cfg, deps, { suspects })) };
   }
