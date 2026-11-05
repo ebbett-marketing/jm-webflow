@@ -20,6 +20,7 @@ export interface Deps {
 }
 
 const REMOVE_TRIGGERS = new Set(['collection_item_unpublished', 'collection_item_deleted']);
+const CHANGED_DEFER_MS = 3_000;
 const UPDATE_TRIGGERS = new Set(['collection_item_published', 'collection_item_changed', 'collection_item_created']);
 
 export async function handleEvent(cfg: SyncConfig, event: WebflowEvent, deps: Deps): Promise<Record<string, unknown>> {
@@ -43,16 +44,22 @@ export async function handleEvent(cfg: SyncConfig, event: WebflowEvent, deps: De
     return { trigger, action: 'reconcile', ...(await reconcile(cfg, deps, { suspects })) };
   }
 
-  const crawl: { id: string; url: string; hash: string | null }[] = [];
+  const live: typeof vehicles = [];
   const skipped: { id: string; why: string }[] = [];
   for (const item of vehicles) {
     if (!item.slug) skipped.push({ id: item.id, why: 'no slug' });
     else if (!changedLivePage(item, trigger)) skipped.push({ id: item.id, why: 'not live' });
-    else {
-      const hash = await fieldHash(item.fieldData, cfg.ignoredFields);
-      if (hash && hash === (await deps.state.lastHash(item.id))) skipped.push({ id: item.id, why: 'unchanged' });
-      else crawl.push({ id: item.id, url: cfg.siteUrl + cfg.vehiclePath + item.slug, hash });
-    }
+    else live.push(item);
+  }
+  // Publishing fires "published" and "changed" at the same moment. Let "published" claim the crawl first,
+  // so "changed" finds its hash and skips; a "changed" on its own (a live edit) still crawls, 3 s later.
+  if (live.length && trigger === 'collection_item_changed') await deps.sleep(CHANGED_DEFER_MS);
+
+  const crawl: { id: string; url: string; hash: string | null }[] = [];
+  for (const item of live) {
+    const hash = await fieldHash(item.fieldData, cfg.ignoredFields);
+    if (hash && hash === (await deps.state.lastHash(item.id))) skipped.push({ id: item.id, why: 'unchanged' });
+    else crawl.push({ id: item.id, url: cfg.siteUrl + cfg.vehiclePath + item.slug, hash });
   }
   if (!crawl.length) return { trigger, action: 'none', skipped };
 

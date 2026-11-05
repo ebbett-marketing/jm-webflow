@@ -96,6 +96,38 @@ test('two identical webhooks at once crawl once', async () => {
   assert.deepEqual([a.action, b.action].sort(), ['crawl', 'none']);
 });
 
+test('a publish ("published" + "changed" at once) crawls once; a live edit alone still crawls', async () => {
+  const w = world({ live: ['/inventory/car-1'], index: [] });
+  // real waits scaled down 100x, and a store with network-like latency (so both events read before either writes)
+  class SlowKV extends MemoryKV {
+    async get(key: string) {
+      await new Promise((r) => setTimeout(r, 2));
+      return super.get(key);
+    }
+    async put(key: string, value: string) {
+      await new Promise((r) => setTimeout(r, 2));
+      return super.put(key, value);
+    }
+  }
+  const deps = {
+    ...w.deps,
+    state: new SyncState(new SlowKV()),
+    sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms / 100)),
+  };
+  const now = new Date().toISOString();
+  const item = { ...published('i1', 'car-1').items[0], lastPublished: now, lastUpdated: now };
+  const [pub, changed] = await Promise.all([
+    handleEvent(config, { trigger: 'collection_item_published', items: [item] }, deps),
+    handleEvent(config, { trigger: 'collection_item_changed', items: [item] }, deps),
+  ]);
+  assert.equal(pub.action, 'crawl');
+  assert.equal(changed.action, 'none');
+
+  const edited = { ...item, fieldData: { ...item.fieldData, 'price---current-now': 80 } };
+  const alone = await handleEvent(config, { trigger: 'collection_item_changed', items: [edited] }, deps);
+  assert.equal(alone.action, 'crawl');
+});
+
 test('a failed crawl request releases the hash so the next webhook retries', async () => {
   const w = world({ live: ['/inventory/car-1'], index: [] });
   const failing = { ...w.deps, fetch: async () => new Response('{"message":"boom"}', { status: 500 }) };
