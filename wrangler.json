@@ -1,12 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "astro",
+  "name": "jm-webflow",
   "compatibility_date": "2025-04-15",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist/client"
   },
+  "kv_namespaces": [
+    { "binding": "SYNC_STATE" }
+  ],
   "observability": {
     "enabled": true
   }

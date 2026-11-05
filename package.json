@@ -1,5 +1,5 @@
 {
-  "name": "astro",
+  "name": "jm-webflow",
   "type": "module",
   "version": "0.0.1",
   "engines": {
@@ -14,16 +14,12 @@
     "preview": "astro build && wrangler dev",
     "deploy": "webflow cloud deploy",
     "astro": "astro",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "node --test test/*.test.ts"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.1.0",
-    "@astrojs/react": "^6.0.0",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "astro": "^7.0.5",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "astro": "^7.0.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250415.0",
