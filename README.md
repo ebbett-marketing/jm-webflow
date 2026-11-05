@@ -66,8 +66,12 @@ Changing a variable needs a new deployment: push a commit, or use "Deploy latest
 Webhooks made in the Webflow dashboard aren't signed, so they're registered through the API with a
 site token instead. Each one then gets its own secret.
 
-1. Site settings → Apps & integrations → API access → generate a token with **Sites: read and write**.
-   Add it to `johnston-motors/.env.local` (outside this repo) as `JOHNSTON_WEBFLOW_SITE_TOKEN=…`.
+1. Site settings → Apps & integrations → API access → generate a token with **Sites: read and write** and
+   **CMS: read** (the `collection_item_*` triggers need CMS read, although the API reference only lists
+   `sites:write`). Add it to `johnston-motors/.env.local` (outside this repo) as
+   `JOHNSTON_WEBFLOW_SITE_TOKEN=…`. The app never uses the token. Webhooks keep firing after the token
+   that created them is revoked (tested 5 Nov 2026), so it can lapse after 365 idle days; generate a new
+   one only when the webhooks need listing, moving or deleting.
 2. `node tools/webhooks.mjs create` registers the six triggers against `/app/api/webflow-webhook`.
    Secrets go to `johnston-motors/.webhooks.local.json`.
 3. `node tools/webhooks.mjs cloud-env` writes `johnston-motors/jm-webflow-cloud.env`. Bulk-import it

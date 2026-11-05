@@ -6,7 +6,7 @@
 //   node tools/webhooks.mjs delete <url>   remove every webhook pointing at <url> (e.g. after a domain move)
 //   node tools/webhooks.mjs cloud-env      write ../jm-webflow-cloud.env for Webflow Cloud's "Bulk import"
 //
-// Needs a site API token with Sites: read and write, in ../.env.local (the johnston-motors folder, outside
+// Needs a site API token with Sites: read and write plus CMS: read (collection_item_* triggers need it), in ../.env.local (the johnston-motors folder, outside
 // this public repo) as JOHNSTON_WEBFLOW_SITE_TOKEN. Webhooks made with a site token each come with their
 // own signing secret; this script keeps them in ../.webhooks.local.json and never prints them. Webhooks
 // made in the Webflow dashboard are unsigned, so don't use those.
@@ -61,7 +61,7 @@ const env = await readEnv();
 const [command = 'list', arg] = process.argv.slice(2);
 const token = env.JOHNSTON_WEBFLOW_SITE_TOKEN;
 if (!token && command !== 'cloud-env') {
-  console.error('Add JOHNSTON_WEBFLOW_SITE_TOKEN (site API token, Sites: read and write) to johnston-motors/.env.local');
+  console.error('Add JOHNSTON_WEBFLOW_SITE_TOKEN (site API token, Sites: read and write, CMS: read) to johnston-motors/.env.local');
   process.exit(1);
 }
 
@@ -81,9 +81,10 @@ if (command === 'list') {
     }
     const created = await api(token, 'POST', `/sites/${SITE_ID}/webhooks`, { triggerType, url });
     if (created.secretKey) store[created.id] = { triggerType, url, secret: created.secretKey };
+    // Save after every webhook: the secret is only returned once, so a later failure mustn't lose it.
+    await writeFile(STORE_FILE, JSON.stringify(store, null, 2) + '\n');
     console.log(`created  ${triggerType}  ${created.id}  ${created.secretKey ? 'secret stored' : 'NO SECRET RETURNED'}`);
   }
-  await writeFile(STORE_FILE, JSON.stringify(store, null, 2) + '\n');
   console.log('Next: node tools/webhooks.mjs cloud-env, then import that file in Webflow Cloud.');
 } else if (command === 'delete') {
   if (!arg) throw new Error('usage: node tools/webhooks.mjs delete <url>');
