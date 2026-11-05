@@ -5,19 +5,9 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { reconcile } from '../../lib/sync.ts';
-import { json, log, setup } from '../../lib/runtime.ts';
+import { authorised, json, log, setup } from '../../lib/runtime.ts';
 
 export const prerender = false;
-
-function authorised(request: Request, token: string): boolean {
-  if (!token) return false;
-  const header = request.headers.get('authorization') ?? '';
-  const given = header.replace(/^Bearer\s+/i, '');
-  if (given.length !== token.length) return false;
-  let diff = 0;
-  for (let i = 0; i < token.length; i++) diff |= given.charCodeAt(i) ^ token.charCodeAt(i);
-  return diff === 0;
-}
 
 export const POST: APIRoute = async ({ request, url }) => {
   const { config, missing, deps } = setup(env as unknown as Record<string, unknown>);

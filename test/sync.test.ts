@@ -23,6 +23,10 @@ class MemoryKV implements KVLike {
   async put(key: string, value: string) {
     this.data.set(key, value);
   }
+  async list({ prefix = '', limit = 1000 }: { prefix?: string; limit?: number }) {
+    const names = [...this.data.keys()].filter((k) => k.startsWith(prefix)).sort();
+    return { keys: names.slice(0, limit).map((name) => ({ name })) };
+  }
 }
 
 /** Fake site + Algolia: `live` = published vehicle paths, `index` = records in Algolia. */
@@ -139,6 +143,39 @@ test('unpublish then republish with no changes crawls the car again', async () =
     w.deps,
   );
   assert.equal((await handleEvent(config, event, w.deps)).action, 'crawl');
+});
+
+test('an unpublished car whose page still answers 200 at first is checked again', async () => {
+  const index = [{ objectID: '1', url: '/inventory/car-1' }];
+  // sitemap still lists car-1 (it only refreshes on a site publish); the page flips to 404 after a moment
+  const w = world({ live: ['/inventory/car-1'], index, sitemap: ['/inventory/car-1'] });
+  const fetchOnce = w.deps.fetch;
+  let pageChecks = 0;
+  const deps = {
+    ...w.deps,
+    fetch: async (input: string, init?: RequestInit) => {
+      if (new URL(input).pathname === '/inventory/car-1' && pageChecks++ > 0) return new Response('', { status: 404 });
+      return fetchOnce(input, init);
+    },
+  };
+  const result = await handleEvent(
+    config,
+    { trigger: 'collection_item_unpublished', items: [{ id: 'i1', collectionId: VEHICLES, slug: 'car-1' }] },
+    deps,
+  );
+  assert.equal(result.rechecked, 1);
+  assert.deepEqual(result.gone, ['/inventory/car-1']);
+  assert.deepEqual(result.stillLive, []);
+});
+
+test('recorded events come back newest first', async () => {
+  const kv = new MemoryKV();
+  const state = new SyncState(kv);
+  await state.record({ n: 1 }, 1_000);
+  await state.record({ n: 2 }, 2_000);
+  await state.record({ n: 3 }, 3_000);
+  const events = (await state.recent(2)) as { n: number }[];
+  assert.deepEqual(events.map((e) => e.n), [3, 2]);
 });
 
 test('a webhook for a car that is still live deletes nothing', async () => {

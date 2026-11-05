@@ -35,8 +35,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'invalid JSON' }, 400);
   }
   const event = parseEvent(body);
-  log({
-    msg: 'webhook',
+  const received = {
     trigger: event.trigger,
     shape: describeBody(body),
     items: event.items.slice(0, 20).map((i) => ({
@@ -47,7 +46,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       lastPublished: i.lastPublished,
       lastUpdated: i.lastUpdated,
     })),
-  });
+  };
+  log({ msg: 'webhook', ...received });
 
   if (missing.length) {
     log({ msg: 'sync skipped: missing settings', missing });
@@ -55,8 +55,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const work = handleEvent(config, event, deps)
-    .then((result) => log({ msg: 'sync', ...result }))
-    .catch((error) => log({ msg: 'sync failed', trigger: event.trigger, error: String(error?.message ?? error) }));
+    .then(async (result) => {
+      log({ msg: 'sync', ...result });
+      await deps.state.record({ ...received, result });
+    })
+    .catch(async (error) => {
+      const message = String(error?.message ?? error);
+      log({ msg: 'sync failed', trigger: event.trigger, error: message });
+      await deps.state.record({ ...received, error: message });
+    });
   const pending = runInBackground(locals, work);
   if (pending) await pending;
   return json({ ok: true });

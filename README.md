@@ -38,15 +38,22 @@ The mount path is `/app` on johnston-motors.webflow.io (set in Webflow Cloud).
 |---|---|
 | `POST /app/api/webflow-webhook` | Webflow webhooks (signed) |
 | `POST /app/api/reconcile` | Manual catch-up: `Authorization: Bearer <SYNC_ADMIN_TOKEN>`, `?dry=1` to report only |
+| `GET /app/api/recent` | The last webhooks and what the app did with each, newest first (kept 7 days, `?limit=` up to 100). Same bearer token |
 | `GET /app/api/health` | Deployed and configured? Shows no values |
 
 ```bash
 curl -s https://johnston-motors.webflow.io/app/api/health
 curl -s -X POST 'https://johnston-motors.webflow.io/app/api/reconcile?dry=1' -H "Authorization: Bearer $SYNC_ADMIN_TOKEN"
+curl -s 'https://johnston-motors.webflow.io/app/api/recent?limit=10' -H "Authorization: Bearer $SYNC_ADMIN_TOKEN"
 ```
 
-Each webhook and its outcome are logged as one JSON line under Webflow Cloud → the environment →
+Each webhook and its outcome are also logged as one JSON line under Webflow Cloud → the environment →
 Runtime logs (`"app":"jm-stock-sync"`).
+
+Timing seen on staging: a publish reaches the index about 12 s later, an unpublish about 6 s later.
+Search results can lag the index by a further minute or two. The sitemap only changes on a site
+publish, so an unpublished car is found by checking its page directly (twice, 10 s apart, if it still
+answers 200 at first).
 
 ## Environment variables (Webflow Cloud → environment → Environment Variables, all marked Secret)
 

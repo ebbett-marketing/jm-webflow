@@ -29,6 +29,16 @@ export function runInBackground(locals: unknown, work: Promise<unknown>): Promis
   return work; // local dev without a Workers context: caller awaits
 }
 
+/** `Authorization: Bearer <SYNC_ADMIN_TOKEN>`, compared in constant time. */
+export function authorised(request: Request, token: string): boolean {
+  if (!token) return false;
+  const given = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+  if (given.length !== token.length) return false;
+  let diff = 0;
+  for (let i = 0; i < token.length; i++) diff |= given.charCodeAt(i) ^ token.charCodeAt(i);
+  return diff === 0;
+}
+
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

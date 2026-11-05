@@ -102,6 +102,9 @@ async function pageStatus(cfg: SyncConfig, path: string, fetchFn: Fetch): Promis
 }
 
 const MAX_CHECKS = 25;
+/** Right after an unpublish a car's page can still answer 200 for a moment; look again this much later. */
+const RECHECK_MS = 10_000;
+const isGone = (status: number) => status === 404 || status === 410;
 
 export interface ReconcileResult {
   sitemap: number;
@@ -109,6 +112,7 @@ export interface ReconcileResult {
   missing: string[];
   gone: string[];
   stillLive: string[];
+  rechecked?: number;
   deleteTask?: number | null;
   crawlTask?: string;
   stopped?: string;
@@ -151,7 +155,18 @@ export async function reconcile(
   } else {
     for (const path of candidates) {
       const status = await pageStatus(cfg, path, deps.fetch);
-      (status === 404 || status === 410 ? result.gone : result.stillLive).push(path);
+      (isGone(status) ? result.gone : result.stillLive).push(path);
+    }
+    const late = result.stillLive.filter((path) => suspects.includes(path));
+    if (late.length) {
+      await deps.sleep(RECHECK_MS);
+      for (const path of late) {
+        if (isGone(await pageStatus(cfg, path, deps.fetch))) {
+          result.stillLive = result.stillLive.filter((p) => p !== path);
+          result.gone.push(path);
+        }
+      }
+      result.rechecked = late.length;
     }
     const limit = Math.max(3, Math.ceil(records.length * 0.2));
     if (result.gone.length > limit) {
